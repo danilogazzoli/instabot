@@ -177,6 +177,7 @@ class InstagramBot:
 
     def like_pic(self):
         driver = self.driver
+
         like_button = driver.find_element_by_xpath(self.selectors["like_button"])
         if 'aria-label="Curtir"' in like_button.get_attribute("innerHTML"):
             like_button.click()
@@ -185,13 +186,17 @@ class InstagramBot:
         driver = self.driver
         if reload_page:
             driver.get(pic_href)
+        driver.execute_script(self.selectors["scroll_to"])
         try:
+            #driver.find_element_by_class_name('v1Nh3').click()  # click on photo to open and upload
+
             self.like_pic()
 
             if comentario:
+                driver.find_element_by_class_name('Ypffh').click() # click the field to insert comment
                 field = driver.find_element_by_class_name('Ypffh')
-                field.click()
                 field.clear()
+
                 try:
                     self.typephrase(comentario, field) # insert comment typing each letter
                     driver.find_element_by_xpath('//button[contains(text(), "Publicar")]').click() # click the post 'comment' button element
@@ -227,7 +232,7 @@ class InstagramBot:
 
     def go_to_account_url(self, account_name):
         driver = self.driver
-        url = self.selector["instagram"] + str(account_name)
+        url = self.selectors["instagram"] + str(account_name)
         if driver.current_url != url:
             driver.get(url)
         self.countdown(5)    
@@ -247,7 +252,7 @@ class InstagramBot:
     def get_followers_number(self, account_name):
         driver = self.driver
         self.go_to_account_url(account_name)
-        seguidores = driver.find_element_by_xpath(self.selector["follower_number"]) 
+        seguidores = driver.find_element_by_xpath(self.selectors["follower_number"]) 
         num_seguidores = seguidores.get_attribute('title')
         num_seguidores = self.text_to_number(num_seguidores)
         return num_seguidores
