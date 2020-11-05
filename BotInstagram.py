@@ -1,3 +1,10 @@
+# -*- coding: utf-8 -*-
+
+'''
+Created in 09/2020
+@Author: Danilo https://github.com/danilogazzoli
+'''
+
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 import time
@@ -233,7 +240,7 @@ class InstagramBot:
     def go_to_account_url(self, account_name):
         driver = self.driver
         url = self.selectors["instagram"] + str(account_name)
-        if driver.current_url != url:
+        if not (url in driver.current_url):
             driver.get(url)
         self.countdown(5)    
 
@@ -267,6 +274,9 @@ class InstagramBot:
     def curtir_foto_perfil(self, account_name, max_count_likes = 1, comentario=None):
         driver = self.driver
         self.go_to_account_url(account_name)
+        if self.check_is_private_profile(account_name):
+            return 0
+
         driver.execute_script(self.selectors["scroll_to"])
         self.countdown(3)
         hrefs = driver.find_elements_by_tag_name("a")
@@ -291,8 +301,9 @@ class InstagramBot:
                     self.comentar_curtir(comentario = comentario, pic_href = pic_href, seguir=False)
                 else:
                     self.comentar_curtir(comentario = None, pic_href = pic_href, seguir=False)    
+                    self.__randomSleep__(10,20)
                 count += 1
-                self.__randomSleep__(10,20)
+                
         return numero_fotos
 
     def turn_off_notifications(self):
@@ -403,17 +414,15 @@ class InstagramBot:
         self.countdown(2)
         text1 = scr2.text
         print(text1)
-        x = datetime.now()
-        print(x)
-        for i in range(1,count):                  
-            try:                                   
-               scr1 = driver.find_element_by_xpath('/html/body/div[4]/div/div/div[2]/ul/div/li[%s]' % i)
+        for i in range(1,count):
+            try:
+               scr1 = driver.find_element_by_xpath(f'/html/body/div[5]/div/div/div[2]/ul/div/li[{i}]')
                driver.execute_script(self.selectors["arguments_scroll_to"], scr1)
                self.countdown(1)
                text = scr1.text
                list = text.encode('utf-8').split()
                account = str(list[0].decode("utf-8"))
-               self.OnGetFollowAccount(number=i, account=account)  
+               self.OnGetFollowAccount(page = page, file_name = file_name, number=i, account=account)  
 
             except NoSuchElementException:
                pass
