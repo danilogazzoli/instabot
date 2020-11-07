@@ -296,7 +296,7 @@ class InstagramBot:
         
         total_likes = random.randint(1,max_count_likes)
         for pic_href in pic_hrefs:
-            if (pic_href.find('/p/') > 0) and (count <= total_likes):
+            if (not pic_href == None) and (pic_href.find('/p/') > 0) and (count <= total_likes):
                 if random_coment == count:
                     self.comentar_curtir(comentario = comentario, pic_href = pic_href, seguir=False)
                 else:
@@ -380,7 +380,7 @@ class InstagramBot:
                 following_button = driver.find_element_by_xpath('/html/body/div[1]/section/main/div/header/section/div[1]/div[2]/div/span/span[1]/button')
         following_button.click()
         self.__randomSleep__(2,10)
-        unfollow_button = driver.find_element_by_xpath('/html/body/div[4]/div/div/div/div[3]/button[1]')
+        unfollow_button = driver.find_element_by_xpath('//button[contains(text(), "Deixar de seguir")]')
         unfollow_button.click()
         self.__randomSleep__()
 
@@ -525,6 +525,15 @@ class InstagramBot:
         try:
             private_check = driver.find_element_by_xpath('/html/body/div[1]/section/main/div/div/article/div[1]/div/h2')
             return private_check.text == 'Esta conta é privada'
+        except:
+            return False
+
+    def check_is_unavailable(self, account_name):
+        driver = self.driver
+        self.go_to_account_url(account_name)
+        try:
+            private_check = driver.find_element_by_xpath('/html/body/div/div[1]/div/div/h2')
+            return private_check.text == 'Esta página não está disponível.'
         except:
             return False
 
