@@ -9,7 +9,6 @@ from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 import time
 import random
-from pyvirtualdisplay import Display
 from selenium.webdriver.support.ui import WebDriverWait
 from datetime import date
 from datetime import datetime
@@ -46,7 +45,6 @@ class InstagramBot:
     def __init__(self, username, password, executable_path):
         self.username = username
         self.password = password
-        self.display = None
         self.count_likes = 0
         self.driver = webdriver.Firefox(executable_path=executable_path)  # Coloque o caminho para o seu geckodriver aqui
 
@@ -81,17 +79,10 @@ class InstagramBot:
           "share_button": "/html/body/div[4]/div/div/div/div[2]/div/div[1]/div/div",
           "input": "/html/body/div[5]/div/div/div[2]/div[1]/div/div[2]/input",
           "select_user": "/html/body/div[5]/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div",
-
+          "like_heart": "//*[contains(@aria-label, 'Curtir')]",
+          "load_more": "//*[contains(@aria-label, 'Carregar mais comentários')]",
 
         }
-
-
-    def display_start(self):
-        self.display = Display(visible=0, size=(800, 600))
-        self.display.start()
-
-    def display_stop(self):
-        self.display.stop()
 
     def login(self):
         driver = self.driver
@@ -189,7 +180,34 @@ class InstagramBot:
         if 'aria-label="Curtir"' in like_button.get_attribute("innerHTML"):
             like_button.click()
 
-    def comentar_curtir(self, comentario, pic_href, seguir=True, reload_page=True, cascatear=False):
+    def curtir_comentarios(self):
+        driver = self.driver
+        like_heart_svg_xpath = self.selectors["like_heart"]
+        all_like_hearts = driver.find_elements_by_xpath(like_heart_svg_xpath)
+
+        for heart_el in all_like_hearts:
+            h = heart_el.get_attribute("height")
+            if h == 12 or h == "12":
+                parent_button = heart_el.find_element_by_xpath('..')
+                try:
+                    parent_button.click()
+                    self.countdown(2)
+                except:
+                    pass
+        load_more  = self.selectors["load_more"] 
+        
+        all_load_more = driver.find_elements_by_xpath(load_more)
+
+        for load_el in all_load_more:
+            parent_button = load_el.find_element_by_xpath('..')
+            try:
+                parent_button.click()
+                self.curtir_comentarios()
+            except:
+                pass
+
+
+    def comentar_curtir(self, comentario, pic_href, seguir=True, reload_page=True, cascatear=False, like_comments=False):
         driver = self.driver
         if reload_page:
             driver.get(pic_href)
@@ -198,6 +216,9 @@ class InstagramBot:
             #driver.find_element_by_class_name('v1Nh3').click()  # click on photo to open and upload
 
             self.like_pic()
+
+            if like_comments:
+                self.curtir_comentarios()
 
             if comentario:
                 driver.find_element_by_class_name('Ypffh').click() # click the field to insert comment
@@ -211,22 +232,21 @@ class InstagramBot:
                     print(e)
                     driver.get(pic_href)
                     driver.execute_script(self.selectors["scroll_to"])
-                
+
                 self.__randomSleep__(380,420)
 
                 if cascatear:
                     comments_div = driver.find_element_by_css_selector('.XQXOT')
-                    driver.execute_script(self.selectors["scroll_to"], comments_div)
+                    driver.execute_script(self.selectors["arguments_scroll_to"], comments_div)
                     self.countdown(3)                             
                     button_responder = driver.find_element_by_xpath('//button[contains(text(), "Responder")]')
                     button_responder.click()
                     self.countdown(3)
-                    field.clear() 
+                    field.clear()
 
         except Exception as e:
             print(e)
             self.countdown(5)
-            raise
 
     def text_to_number(self, str_numero):
         if ',' in str_numero:
@@ -271,7 +291,7 @@ class InstagramBot:
         return num_seguindo / num_seguidores
 
 
-    def curtir_foto_perfil(self, account_name, max_count_likes = 1, comentario=None):
+    def curtir_foto_perfil(self, account_name, max_count_likes = 1, comentario=None, like_comments = False):
         driver = self.driver
         self.go_to_account_url(account_name)
         if self.check_is_private_profile(account_name):
@@ -281,7 +301,7 @@ class InstagramBot:
         self.countdown(3)
         hrefs = driver.find_elements_by_tag_name("a")
         pic_hrefs = [elem.get_attribute("href") for elem in hrefs]
-        numero_fotos = len(pic_hrefs)
+        numero_fotos = self.count_pics(pic_hrefs)
         print(account_name + " fotos: " + str(numero_fotos))
         if numero_fotos == 0:
             return numero_fotos
@@ -298,13 +318,20 @@ class InstagramBot:
         for pic_href in pic_hrefs:
             if (not pic_href == None) and (pic_href.find('/p/') > 0) and (count <= total_likes):
                 if random_coment == count:
-                    self.comentar_curtir(comentario = comentario, pic_href = pic_href, seguir=False)
+                    self.comentar_curtir(comentario = comentario, pic_href = pic_href, seguir=False, like_comments=like_comments)
                 else:
-                    self.comentar_curtir(comentario = None, pic_href = pic_href, seguir=False)    
+                    self.comentar_curtir(comentario = None, pic_href = pic_href, seguir=False, like_comments=like_comments)
                     self.__randomSleep__(10,20)
                 count += 1
                 
         return numero_fotos
+
+    def count_pics(self, pic_hrefs):
+        count = 0
+        for pic_href in pic_hrefs:
+            if (pic_href != None) and (pic_href.find('/p/') > 0):
+                count += 1
+        return count
 
     def turn_off_notifications(self):
         driver = self.driver
