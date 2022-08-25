@@ -18,6 +18,11 @@ import csv
 from selenium.common.exceptions import NoSuchElementException
 import logging
 from random import shuffle
+from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
+from selenium.webdriver.firefox.firefox_binary import FirefoxBinary
+from selenium import webdriver
+import requests
+from selenium.webdriver.common.by import By
 
 '''
 Esta classe é para ser utilizado como manipulador de eventos
@@ -42,11 +47,22 @@ class Event():
 Esta é a classe principal do Bot
 '''
 class InstagramBot:
+
     def __init__(self, username, password, executable_path):
         self.username = username
         self.password = password
         self.count_likes = 0
-        self.driver = webdriver.Firefox(executable_path=executable_path)  # Coloque o caminho para o seu geckodriver aqui
+        if 'geckodriver' in executable_path:
+            firefox_capabilities = DesiredCapabilities().FIREFOX
+            firefox_capabilities['marionette'] = True
+            self.driver = webdriver.Firefox(executable_path=executable_path)
+        else:     
+            options = webdriver.ChromeOptions()
+            ua = requests.Session()
+            options.add_argument(f'iser-agent={ua}')
+            options.add_experimental_option('useAutomationExtension', False)
+            options.add_experimental_option('excludeSwitches', ['enable-automation'])
+            self.driver = webdriver.Chrome(executable_path=executable_path, chrome_options=options)
 
         self.OnGetAccountInLikes=Event() 
 
@@ -69,7 +85,7 @@ class InstagramBot:
           "caption_follow_button": "Seguir",
           "like_button": "/html/body/div[1]/section/main/div/div[1]/article/div[3]/section[1]/span[1]/button",
           "following_number": "/html/body/div[1]/section/main/div/header/section/ul/li[3]/a/span",
-          "follower_number": "/html/body/div[1]/section/main/div/header/section/ul/li[2]/a/span",
+          "follower_number": "/html/body/div[1]/section/main/div/header/section/ul/li[2]/a/div/span",
           "message_button": "/html/body/div[1]/section/main/div/header/section/div[1]/div[1]/div/button",
           "message_box": "/html/body/div[1]/section/div/div[2]/div/div/div[2]/div[2]/div/div[2]/div/div/div[2]/textarea",
           "send_button_2": "/html/body/div[1]/section/main/div/div[1]/article/div[3]/section[1]/button",
@@ -88,11 +104,6 @@ class InstagramBot:
         driver = self.driver
         driver.get(self.selectors["instagram"])
         self.countdown(3)
-        try:
-            login_button = driver.find_element_by_xpath(self.selectors["login"] )
-            login_button.click()
-        except:
-            pass
 
         user_element = driver.find_element_by_xpath(self.selectors["username_field"])
         user_element.clear()
@@ -106,6 +117,27 @@ class InstagramBot:
         password_element.send_keys(Keys.RETURN)
         self.__randomSleep__(4,6)
 
+
+    def get_pics_ref(self, scroll_to = 9):
+        driver = self.driver
+        for i in range(1, scroll_to): 
+            driver.execute_script(self.selectors["scroll_to"])
+            self.countdown(3)
+        
+        hrefs = driver.find_elements_by_tag_name("a")
+        pic_hrefs = [elem.get_attribute("href") for elem in hrefs]
+        hrefs = []
+        for href in pic_hrefs:
+            if 'instagram.com/p/' in href:
+                hrefs.append(href)
+        #pic_hrefs = ['instagram.com/p/' in elem for elem in pic_hrefs]        
+        return hrefs
+    
+    def get_pic_from_href(self, pic_href):
+        driver = self.driver
+        driver.get(pic_href)
+        driver.execute_script(self.selectors["scroll_to"])
+        
     def curtir_fotos_com_a_hashtag(self, hashtag):
         if (self.count_likes > 0) and (self.count_likes % 200 == 0):
             print('já atingiu o limite de curtidas')
@@ -116,26 +148,23 @@ class InstagramBot:
         driver = self.driver
         driver.get(self.selectors["instagram"] + "explore/tags/" + hashtag + "/")
         self.countdown(5)
-        for i in range(1, 9):  # Altere o segundo valor aqui para que ele desça a quantidade de páginas que você quiser: quer que ele desça 5 páginas então você deve alterar de range(1,3) para range(1,5)
-            driver.execute_script(self.selectors["scroll_to"])
-            self.countdown(3)
-        hrefs = driver.find_elements_by_tag_name("a")
-        pic_hrefs = [elem.get_attribute("href") for elem in hrefs]
-        print(hashtag + " fotos: " + str(len(pic_hrefs)))
+        
+        pic_hrefs = self.get_pics_ref()
 
+        print(hashtag + " fotos: " + str(len(pic_hrefs)))
         for pic_href in pic_hrefs:
             try:
-                pic_href.index(self.selectors["instagram"] + "p")
+                pic_href.index(self.selectors["InstagramBot"] + "p")
             except ValueError as err:
                 print("pulando link inválido")
                 continue
-            driver.get(pic_href)
-            driver.execute_script(self.selectors["scroll_to"])
+            self.get_pic_from_href(pic_href)
             try:
                 self.__randomSleep__(1,2)
                 button_seguindo = driver.find_element_by_xpath(self.selectors['following_button'] )
 
                 print(button_seguindo.text)
+                self.curtir_comentarios()
                 if button_seguindo.text == self.selectors['caption_follow_button']:
                     self.like_pic()
                     self.count_likes += 1
@@ -175,59 +204,98 @@ class InstagramBot:
 
     def like_pic(self):
         driver = self.driver
+        panels = driver.find_element_by_class_name('eo2As')
+        div = panels.find_element_by_class_name('ltpMr')
+        buttons = div.find_elements_by_class_name('wpO6b')
+        #driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'start'});", panels) 
+        #buttons[0].click()
+        driver.execute_script("arguments[0].click();", buttons[0]) 
 
-        like_button = driver.find_element_by_xpath(self.selectors["like_button"])
-        if 'aria-label="Curtir"' in like_button.get_attribute("innerHTML"):
-            like_button.click()
+    def check_like_buttons(self):
+        driver = self.driver
+        
+        like_buttons = []
+        #buttons = driver.find_elements(By.XPATH, "//*[@aria-label='Curtir']")
+        buttons = driver.find_elements(By.XPATH, "//*[@type='button']")
+        for button in buttons:
+            driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'start'});", button) 
+            if 'Curtir' in button.get_attribute('innerHTML'):
+                like_buttons.append(button)
+        '''
+        for button in buttons:
+            if 'aria-label="Curtir"' in button.get_attribute('outerHTML'):
+               like_buttons.append(button)
+        return like_buttons
+        '''
+        return like_buttons
 
     def curtir_comentarios(self):
         driver = self.driver
-        like_heart_svg_xpath = self.selectors["like_heart"]
-        all_like_hearts = driver.find_elements_by_xpath(like_heart_svg_xpath)
-
-        for heart_el in all_like_hearts:
-            h = heart_el.get_attribute("height")
-            if h == 12 or h == "12":
-                parent_button = heart_el.find_element_by_xpath('..')
-                try:
-                    parent_button.click()
-                    self.countdown(2)
-                except:
-                    pass
-        load_more  = self.selectors["load_more"] 
         
-        all_load_more = driver.find_elements_by_xpath(load_more)
+        buttons = self.check_like_buttons()
 
-        for load_el in all_load_more:
-            parent_button = load_el.find_element_by_xpath('..')
+        #while len(buttons) > 0:
+        for button in buttons:
+            driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'start'});", button) 
             try:
-                parent_button.click()
-                self.curtir_comentarios()
+                button.click()
             except:
                 pass
+            self.countdown(random.randint(1, 3))
 
+            #buttons = self.check_like_buttons()
+        
+        
 
+    def get_publish_button(self):
+        driver = self.driver
+        publish_button = None
+        buttons = driver.find_elements_by_class_name('_aacl')
+        for button in buttons:
+            if "Publicar" in button.text:
+               publish_button = button
+               break
+        return publish_button
+
+    def check_comments_enabled(self):
+        driver = self.driver
+        inputs = driver.find_elements_by_class_name('_7UhW9 ')
+        disabled_text = 'Os comentários nesta publicação foram limitados.'
+        for input in inputs:
+            if disabled_text in input.text:
+                return False
+        return True        
+
+   
     def comentar_curtir(self, comentario, pic_href, seguir=True, reload_page=True, cascatear=False, like_comments=False):
         driver = self.driver
         if reload_page:
             driver.get(pic_href)
         driver.execute_script(self.selectors["scroll_to"])
         try:
-            #driver.find_element_by_class_name('v1Nh3').click()  # click on photo to open and upload
-
-            self.like_pic()
-
+            #self.like_pic()
             if like_comments:
                 self.curtir_comentarios()
 
-            if comentario:
-                driver.find_element_by_class_name('Ypffh').click() # click the field to insert comment
-                field = driver.find_element_by_class_name('Ypffh')
+            if comentario and self.check_comments_enabled():
+                #
+                #field.click()
+                self.__randomSleep__(10,20)
+                field = driver.find_element_by_xpath(".//*[@aria-label='Adicione um comentário...']")
+                #driver.find_element_by_class_name('Ypffh').click() # click the field to insert comment
+                #field = driver.find_element_by_class_name('Ypffh')
+                field.click()
+                field = driver.find_element_by_tag_name('textarea')
                 field.clear()
+                
 
                 try:
                     self.typephrase(comentario, field) # insert comment typing each letter
-                    driver.find_element_by_xpath('//button[contains(text(), "Publicar")]').click() # click the post 'comment' button element
+                    publish_button = self.get_publish_button()
+                    if publish_button:
+                        publish_button.click()
+                    #driver.find_element_by_class_name('sqdOP').click()
+                    #driver.find_element_by_xpath('//button[contains(text(), "Publicar")]').click() # click the post 'comment' button element
                 except Exception as e:
                     print(e)
                     driver.get(pic_href)
@@ -249,10 +317,13 @@ class InstagramBot:
             self.countdown(5)
 
     def text_to_number(self, str_numero):
+        str_numero = str_numero.replace(' seguidores', '')
+        str_numero = str_numero.replace(' seguindo', '')
+        str_numero = str_numero.replace('.', '')
         if ',' in str_numero:
-             str_numero = str_numero.replace('mil', '00')
-             str_numero = str_numero.replace(',', '')
-        str_numero = str_numero.replace('.','')
+            str_numero = str_numero.replace('mil', '00')
+            str_numero = str_numero.replace(',', '')
+            str_numero = str_numero.replace('.','')
 
         str_numero = str_numero.rstrip()
         return int(str_numero)
@@ -264,26 +335,21 @@ class InstagramBot:
             driver.get(url)
         self.countdown(5)    
 
-    def get_following_number(self, account_name):
-        driver = self.driver
-        self.go_to_account_url(account_name)
-        try:
-            seguindo = driver.find_element_by_xpath(self.selectors["following_number"])
-            num_seguindo = seguindo.text
-        except:
-            num_seguindo = '0'
 
-        num_seguindo = self.text_to_number(num_seguindo)
-        return num_seguindo
-    
-    def get_followers_number(self, account_name):
+    def get_following_followers_number(self, account_name, position):
         driver = self.driver
         self.go_to_account_url(account_name)
-        seguidores = driver.find_element_by_xpath(self.selectors["follower_number"]) 
-        num_seguidores = seguidores.get_attribute('title')
+        elements = driver.find_elements_by_class_name('_7UhW9')
+        num_seguidores = elements[position].text
         num_seguidores = self.text_to_number(num_seguidores)
         return num_seguidores
+
+    def get_following_number(self, account_name):
+        return self.get_following_followers_number(account_name, 4)
     
+    def get_followers_number(self, account_name):
+        return self.get_following_followers_number(account_name, 3)
+
     def check_percentual_engagement(self, account_name):
         num_seguidores = self.get_followers_number(account_name)
         num_seguindo = self.get_following_number(account_name)
@@ -429,31 +495,99 @@ class InstagramBot:
 
         follow_button.click()
         self.__randomSleep__()
+    
+    def getAccountsfromStringToList(self, string, accounts, page, file_name):
+        if page == 'followers':   
+            string = string.replace('Seguidores', '')
+        else:
+            string = string.replace('Seguindo', '')
+
+        listRes = list(string.split("\n"))
+
+        if len(accounts) == 0:
+            if (len(listRes) > 0) and (listRes[0] == ''):
+                listRes.pop(0)
+        i = len(accounts)
+        capturar = True
+        for elem in listRes:
+            if (capturar) and (not elem in accounts):
+                elem = str(elem).replace('Seguir', '')
+                elem = elem.encode('utf-8').split()
+                accounts.append(elem)
+                i += 1
+                if len(elem) > 0:
+                    self.OnGetFollowAccount(InstaBot = self, page = page, file_name = file_name, number=i, account=elem[0])
+            capturar = True if elem == 'Seguir' else False
+        return accounts
+
+
 
     def get_followers_following(self, account, page, count, file_name):
-        self.turn_off_notifications
+        pos = 3 if page == 'followers' else 4
+        followers_ing = self.get_following_followers_number(account, pos)
+        #print('vai desligar as notificações')
+        #self.turn_off_notifications
         self.countdown(3)
         driver = self.driver
+        print(self.selectors["instagram"] + account)
         driver.get(self.selectors["instagram"] + account)
         self.countdown(2)
-        driver.find_element_by_xpath('//a[contains(@href, "%s")]' % page).click()
-        scr2 = driver.find_element_by_xpath('//*[@id="react-root"]/section/main/div/header/section/ul/li[2]/a')
+
+        #driver.find_element_by_xpath('//a[contains(@href, "%s")]' % page).click()
+        scr2 = driver.find_element_by_xpath('//*[@id="react-root"]/section/main/div/header/section/ul/li[2]/a/div/span')
+        scr2.click()
         self.countdown(2)
         text1 = scr2.text
         print(text1)
-        for i in range(1,count):
-            try:
-               scr1 = driver.find_element_by_xpath(f'/html/body/div[5]/div/div/div[2]/ul/div/li[{i}]')
-               driver.execute_script(self.selectors["arguments_scroll_to"], scr1)
-               self.countdown(1)
-               text = scr1.text
-               list = text.encode('utf-8').split()
-               account = str(list[0].decode("utf-8"))
-               self.OnGetFollowAccount(page = page, file_name = file_name, number=i, account=account)  
+        panels = driver.find_element_by_class_name('pbNvD ')
+        accounts_list = []
+        num = 1 
+        while True:
+            accounts_list = self.getAccountsfromStringToList(panels.text,accounts_list, page, file_name)
+            if len(accounts_list) > 0:
+                rev_list = list(reversed(accounts_list))
+                last_elem = rev_list[0][0]
+                print(last_elem)
+                panels_container = self.driver.find_element_by_class_name('jSC57')
+                panels = panels_container.find_elements_by_tag_name('li')
+                start_scrolling = False
+                for panel in panels:
+                    driver.execute_script(self.selectors["arguments_scroll_to"], panel) 
+                    num += 1
+                    if str(last_elem) in panel.text:
+                        start_scrolling = True
+                    if start_scrolling:
+                        self.countdown(15)
+                    self.countdown(1)                        
+                panels = driver.find_element_by_class_name('pbNvD ')    
 
-            except NoSuchElementException:
-               pass
 
+            if followers_ing  == num:
+                break
+        return accounts_list    
+
+
+        ''' 
+        #frame = driver.find_element_by_class_name('PZuss')
+
+        while (count > 0):
+            #<li class="wo9IH"><div class="uu6c_"><div class="t2ksc"><div class="Jv7Aj mArmR   pZp3x"><div class="RR-M-  SAvC5" aria-disabled="true" role="button" tabindex="-1"><canvas class="CfWVH" style="position: absolute; top: -5px; left: -5px; width: 40px; height: 40px;" width="40" height="40"></canvas>
+            #<span class="_7UhW9   xLCgt        qyrsm KV-D4           se6yk       T0kll ">fersilva81</span>
+            if panel % 4 == 0:
+                scr1 = panels[panel]
+                driver.execute_script(self.selectors["arguments_scroll_to"], scr1)
+                self.countdown(1)
+                text = scr1.text
+                list = text.encode('utf-8').split()
+                account = str(list[0].decode("utf-8"))
+                  
+                i += 1
+            panel += 1
+            if i % count == 0:
+                panels = frame.find_elements_by_class_name("wo9IH")
+                count = len(panels)
+        '''        
+        
 
     def get_followers(self, account, count, file_name=""):
         self.get_followers_following(account, 'followers', count, file_name)
@@ -492,7 +626,7 @@ class InstagramBot:
 
         file_exists = os.path.isfile(file_name)
         if not file_exists:
-            f.open(file_name,'w') 
+            f = open(file_name,'w+') 
             f.write(account_str)
             f.close()
         else: 
@@ -559,8 +693,7 @@ class InstagramBot:
         driver = self.driver
         self.go_to_account_url(account_name)
         try:
-            private_check = driver.find_element_by_xpath('/html/body/div/div[1]/div/div/h2')
-            return private_check.text == 'Esta página não está disponível.'
+            return driver.find_element_by_tag_name('h2').text == 'Esta página não está disponível.'
         except:
             return False
 
@@ -619,6 +752,23 @@ class InstagramBot:
                pass
 
         return accounts
+
+    def save_accounts_to_file(self, file_name, accounts):
+        f = open(file_name,'w')
+        f.write('account\n')
+        for account in accounts:
+            f.write(account)
+        f.close()
+
+    def is_blocked(self):
+        driver = self.driver
+        trylater = driver.find_elements_by_class_name("_aacl")
+        blocked = False
+        for elem in trylater:
+            if elem.text == 'Tente novamente mais tarde':
+                blocked = True
+                break    
+        return blocked    
 
 
 
