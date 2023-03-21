@@ -349,7 +349,7 @@ class InstagramBot:
     def get_following_followers_number(self, account_name, position):
         driver = self.driver
         self.go_to_account_url(account_name)
-        elements = driver.find_element(By.CLASS_NAME, '_ac2a')
+        elements = driver.find_elements(By.CLASS_NAME, '_ac2a')
         num_seguidores = elements[position].get_attribute('title')
         num_seguidores = self.text_to_number(num_seguidores)
         return num_seguidores, elements[position]
@@ -538,12 +538,11 @@ class InstagramBot:
         followers_ing, button = self.get_following_followers_number(account, pos)
         button.click()
         self.countdown(3)
-        self.countdown(2)
         accounts_list = []
         num = 0
         while True:
             panels_container = self.driver.find_element(By.CLASS_NAME, '_aano')
-            panels = panels_container.find_element(By.TAG_NAME, 'div')
+            panels = panels_container.find_elements(By.TAG_NAME, 'div')
             panels = panels[0]
             panels_labels = panels.text.split('\n')
             idx = 0
@@ -552,7 +551,7 @@ class InstagramBot:
                     if not [panels_labels[idx-2], panels_labels[idx-1]] in accounts_list: 
                         num += 1
                         accounts_list.append([panels_labels[idx-2], panels_labels[idx-1]])
-                        last_panel = panels_container.find_element(By.XPATH, f"//*[text()='{panels_labels[idx-2]}']")[0]
+                        last_panel = panels_container.find_elements(By.XPATH, f"//*[text()='{panels_labels[idx-2]}']")[0]
                         self.OnGetFollowAccount(InstaBot = self, page = page, number=num, account=panels_labels[idx-2], name=panels_labels[idx-1], file_name=file_name)
                         driver.execute_script(self.selectors["arguments_scroll_to"], last_panel) 
                         self.countdown(0.5)
