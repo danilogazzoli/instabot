@@ -253,21 +253,13 @@ class InstagramBot:
     def get_publish_button(self):
         driver = self.driver
         publish_button = None
-        buttons = driver.find_element(By.TAG_NAME, 'div')
-        for button in buttons:
-            if button.text == "Publicar":
-               publish_button = button
-               break
-        return publish_button
+        buttons = driver.find_elements(By.XPATH, f"//*[text()='Publicar']")
+        return buttons[0]
 
     def check_comments_enabled(self):
         driver = self.driver
-        inputs = driver.find_element(By.CLASS_NAME, '_7UhW9 ')
-        disabled_text = 'Os comentários nesta publicação foram limitados.'
-        for input in inputs:
-            if disabled_text in input.text:
-                return False
-        return True        
+        inputs = driver.find_elements(By.XPATH, f"//*[text()='Os comentários nesta publicação foram limitados.']")
+        return len(inputs) == 0
 
     def get_text_area(self):
         driver = self.driver
@@ -741,7 +733,7 @@ class InstagramBot:
 
     def is_blocked(self):
         driver = self.driver
-        trylater = driver.find_element(By.CLASS_NAME, "_aacl")
+        trylater = driver.find_elements(By.CLASS_NAME, "_aacl")
         blocked = False
         for elem in trylater:
             if elem.text == 'Tente novamente mais tarde':
